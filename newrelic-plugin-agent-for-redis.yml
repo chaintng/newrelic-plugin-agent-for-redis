@@ -1,0 +1,41 @@
+---
+
+# Run by,
+- name: add new relic redis monitoring
+  sudo: yes
+  hosts: '{{ host }}'
+
+  tasks:
+    - name: check if pip installed
+      command: pip -v
+      register: pip_installed
+      ignore_errors: true
+    - name: check if newrelic-plugin-agent already run
+      shell: ps -aux | grep "newrelic-plugin-agent -c" | wc -l | grep 3
+      register: newrelic_plugin_agent_running
+      ignore_errors: true
+    - name: download pip python script
+      get_url:
+        url: https://bootstrap.pypa.io/get-pip.py
+        dest: ~/get-pip.py
+        mode: 0744
+      when: pip_installed|failed
+    - name: install pip
+      command: ~/get-pip.py
+      when: pip_installed|failed
+    - name: install newrelic-plugin-agent
+      command: pip install newrelic-plugin-agent
+    - name: make newrelic plugin directories
+      file: path={{ item }} state=directory
+      with_items:
+        - /etc/newrelic
+        - /var/log/newrelic
+        - /var/run/newrelic
+    - name: copy newrelic-plugin configuration
+      template:
+        src: ./newrelic-plugin-agent.cfg.j2
+        dest: /etc/newrelic/newrelic-plugin-agent.cfg
+      when: newrelic_plugin_agent_running|failed
+    - name: run newrelic-plugin-agent
+      command: newrelic-plugin-agent -c /etc/newrelic/newrelic-plugin-agent.cfg
+      when: newrelic_plugin_agent_running|failed
